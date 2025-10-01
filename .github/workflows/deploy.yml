@@ -1,0 +1,57 @@
+name: Deploy static site to GitHub Pages (no commits)
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: "*/360 * * * *"   # update feed every 15 minutes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build site with fresh feed.json
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          HEADER_SECRET: ${{ secrets.HEADER_SECRET }}
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          rsync -a --delete \
+            --exclude 'public' \
+            --exclude '.git' \
+            --exclude '.github' \
+            ./ public/
+          curl -sSfL \
+            -H "Accept: application/json" \
+            ${HEADER_SECRET:+ -H "X-Webhook-Secret: ${HEADER_SECRET}"} \
+            "${WEBHOOK_URL}" \
+            -o public/feed.json
+          jq empty public/feed.json
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
