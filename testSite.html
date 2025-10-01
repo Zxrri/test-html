@@ -112,7 +112,7 @@
     // ---------------- Config ----------------
     const DEFAULT_ENDPOINT = './feed.json';
     const urlParams = new URLSearchParams(location.search);
-    const FEED_ENDPOINT = urlParams.get('endpoint') || DEFAULT_ENDPOINT;
+    const FEED_ENDPOINT = DEFAULT_ENDPOINT;
 
     let allItems = [], autoTimer = null;
     const grid=document.getElementById('grid'), statusEl=document.getElementById('status'),
@@ -162,3 +162,4 @@
   </script>
 </body>
 </html>
+
