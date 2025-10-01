@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tech Pulse — News</title>
+  <meta name="description" content="Flux de nouvelles agrégées (AI, Tech, InfoSec)">
+  <style>
+    :root{
+      --bg:#0b0d10;--panel:#11151a;--muted:#7a8b9a;--text:#e6edf3;
+      --brand:#4cc9f0;--accent:#22d3ee;
+      --ok:#22c55e;--warn:#f59e0b;--err:#ef4444;
+      --card:#0f1318;--cardHover:#151a21;--border:#1f2833;--chip:#18202a
+    }
+    @media (prefers-color-scheme: light){
+      :root{--bg:#f6f7fb;--panel:#fff;--muted:#5b6773;--text:#0e141b;
+      --brand:#2563eb;--accent:#3b82f6;
+      --card:#fff;--cardHover:#f7f9fc;--border:#e5eaf0;--chip:#eef2f7}
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:
+        radial-gradient(1200px 800px at 10% -10%, rgba(76,201,240,.08), transparent 60%),
+        radial-gradient(1000px 700px at 120% 10%, rgba(59,130,246,.08), transparent 60%),
+        var(--bg);
+      color:var(--text);
+      font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif
+    }
+    a{color:inherit;text-decoration:none}
+    .container{max-width:1100px;margin:0 auto;padding:24px}
+
+    header{display:grid;gap:12px;align-items:center;grid-template-columns:1fr auto;margin-bottom:16px}
+    .title{font-size:clamp(22px,3vw,34px);font-weight:800}
+    .subtitle{color:var(--muted);font-size:14px}
+
+    .controls{display:grid;grid-template-columns:1fr 180px 140px;gap:10px;margin:14px 0 18px}
+    .field{display:flex;align-items:center;border:1px solid var(--border);background:var(--panel);border-radius:14px;padding:8px 12px;gap:8px}
+    .field input,.field select{width:100%;border:0;outline:0;background:transparent;color:var(--text);font-size:14px}
+
+    .grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+
+    .card{border:1px solid var(--border);background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0)),var(--card);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px;transition:.2s transform,.2s box-shadow,.2s border-color}
+    .card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.12)}
+    .card h3{margin:0;font-size:18px;font-weight:700}
+
+    /* Bandeau coloré par catégorie */
+    .card.AI{border-top:4px solid #3b82f6}
+    .card.TECH{border-top:4px solid #22c55e}
+    .card.INFOSEC{border-top:4px solid #ef4444}
+
+    .feedlist{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+    .feedlist li{font-size:14px;line-height:1.4}
+    .feedlist a:hover{color:var(--accent);text-decoration:underline}
+    .feedlist .muted{font-size:12px;margin-left:4px;color:var(--muted)}
+
+    .meta{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:12px}
+    .chip{background:var(--chip);color:var(--muted);padding:4px 8px;border-radius:999px;border:1px solid var(--border)}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:var(--chip);border:1px solid var(--border);color:var(--muted);font-size:12px}
+    .muted{color:var(--muted)}
+    .hidden{display:none}
+
+    .skeleton{animation:pulse 1.2s ease-in-out infinite;border-radius:10px;background:linear-gradient(90deg,rgba(255,255,255,.06),rgba(255,255,255,.12),rgba(255,255,255,.06))}
+    @keyframes pulse{0%{opacity:.8}50%{opacity:.4}100%{opacity:.8}}
+
+    footer{margin:28px 0 8px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;align-items:center}
+    .hint{font-size:12px;color:var(--muted)}
+
+    @media (max-width:760px){.controls{grid-template-columns:1fr}header{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <div class="title">Tech Pulse</div>
+        <div class="subtitle">Flux consolidé (AI, Tech, InfoSec)</div>
+      </div>
+      <span id="status" class="badge">Inactif</span>
+    </header>
+
+    <section class="controls">
+      <label class="field">
+        <input id="q" placeholder="Rechercher…">
+      </label>
+      <label class="field">
+        <select id="sort">
+          <option value="new">Plus récent</option>
+          <option value="old">Plus ancien</option>
+          <option value="az">A → Z</option>
+        </select>
+      </label>
+      <label class="field">
+        <select id="auto">
+          <option value="0">Auto: désactivé</option>
+          <option value="300000">Auto: 5 min</option>
+          <option value="900000">Auto: 15 min</option>
+        </select>
+      </label>
+    </section>
+
+    <div id="alert" class="hint hidden"></div>
+    <section id="grid" class="grid" aria-live="polite"></section>
+
+    <footer>
+      <div id="updated" class="muted">Dernière mise à jour — …</div>
+    </footer>
+  </div>
+
+  <script>
+    // ---------------- Config ----------------
+    const DEFAULT_ENDPOINT = './feed.json';
+    const urlParams = new URLSearchParams(location.search);
+    const FEED_ENDPOINT = urlParams.get('endpoint') || DEFAULT_ENDPOINT;
+
+    let allItems = [], autoTimer = null;
+    const grid=document.getElementById('grid'), statusEl=document.getElementById('status'),
+          updatedEl=document.getElementById('updated'), qEl=document.getElementById('q'),
+          sortEl=document.getElementById('sort'), autoEl=document.getElementById('auto'),
+          alertEl=document.getElementById('alert');
+
+    qEl.addEventListener('input',render); sortEl.addEventListener('change',render);
+    autoEl.addEventListener('change',()=>{if(autoTimer)clearInterval(autoTimer);const ms=+autoEl.value||0;if(ms>0)autoTimer=setInterval(load,ms);});
+
+    function setStatus(t,c){statusEl.textContent=t;statusEl.style.color=c||'inherit';}
+    function skeleton(n=6){grid.innerHTML='';for(let i=0;i<n;i++){const c=document.createElement('div');c.className='card';c.innerHTML=`<div class="skeleton" style="height:16px;width:70%"></div><div class="skeleton" style="height:12px;width:40%;margin-top:8px"></div>`;grid.appendChild(c);}}
+
+    function deepFlatten(x,out=[]){if(Array.isArray(x)){x.forEach(i=>deepFlatten(i,out));return out;}if(x&&typeof x==='object'){if('json'in x)return deepFlatten(x.json,out);if('data'in x&&Array.isArray(x.data))return deepFlatten(x.data,out);if(x.title||x.link)out.push(x);for(const k of Object.keys(x)){if(typeof x[k]==='object')deepFlatten(x[k],out);}}return out;}
+    function categoryFromLink(h){try{const s=new URL(h).pathname.toLowerCase();if(s.includes('/ai/'))return'AI';if(s.includes('/infosec/'))return'INFOSEC';}catch{}return'TECH';}
+
+    async function load(){
+      try{
+        setStatus('Chargement','var(--warn)');skeleton();
+        const r=await fetch(FEED_ENDPOINT,{headers:{'Accept':'application/json'}});
+        if(!r.ok)throw new Error('HTTP '+r.status);
+        const data=await r.json();
+        const root=Array.isArray(data?.items)?data.items:(Array.isArray(data)?data:[data]);
+        const flat=deepFlatten(root);
+        allItems=flat.map(x=>{const title=x.title||'(Sans titre)',link=x.link||x.guid||'#',summary=x.description||'',published=new Date(x.isoDate||x.pubDate||x.date);return{title,link,summary,published,isDate:!isNaN(+published),category:categoryFromLink(link)};});
+        updatedEl.textContent='Dernière mise à jour — '+new Date().toLocaleString();
+        setStatus('Actif','var(--ok)');render();
+      }catch(e){setStatus('Erreur','var(--err)');grid.innerHTML=`<div class="card"><h3>Échec</h3><p>${e.message}</p></div>`;}
+    }
+
+    function render(){
+      const q=(qEl.value||'').toLowerCase(),mode=sortEl.value;
+      let items=allItems.filter(it=>it.title.toLowerCase().includes(q)||(it.summary||'').toLowerCase().includes(q));
+      items.sort((a,b)=>mode==='az'?a.title.localeCompare(b.title):mode==='old'?(a.published-b.published):(b.published-a.published));
+      const bucket={AI:[],TECH:[],INFOSEC:[]};for(const it of items)bucket[it.category].push(it);
+      bucket.AI=bucket.AI.slice(0,5);bucket.TECH=bucket.TECH.slice(0,5);bucket.INFOSEC=bucket.INFOSEC.slice(0,5);
+      grid.innerHTML='';
+      for(const k of ['AI','TECH','INFOSEC']){
+        const arr=bucket[k];const el=document.createElement('article');el.className='card '+k;
+        el.innerHTML=`<h3>${k}</h3><ul class="feedlist">${arr.map(i=>`<li><a href="${i.link}" target="_blank">${escapeHtml(i.title)}</a>${i.isDate?`<span class="muted">· ${timeAgo(i.published)}</span>`:''}</li>`).join('')||'<li class="muted">Aucun article</li>'}</ul>`;grid.appendChild(el);}
+    }
+
+    function timeAgo(d){const diff=Math.floor((Date.now()-d.getTime())/1000);const u=[['an',31536000],['mois',2592000],['j',86400],['h',3600],['min',60],['s',1]];for(const[n,s]of u){const v=Math.floor(diff/s);if(v>=1)return`${v} ${n}${v>1&&n!=='min'&&n!=='h'?'s':''}`;}return'maintenant';}
+    function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+    (function init(){setStatus('Prêt','var(--muted)');if(+autoEl.value>0)autoTimer=setInterval(load,+autoEl.value);load();})();
+  </script>
+</body>
+</html>
