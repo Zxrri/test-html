@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   schedule:
-    - cron: "*/360 * * * *"   # update feed every 15 minutes
+    - cron: "0 */6 * * *"  # update feed every 15 minutes
   workflow_dispatch:
 
 permissions:
